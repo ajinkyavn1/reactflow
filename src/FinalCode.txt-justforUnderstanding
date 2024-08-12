@@ -1,0 +1,124 @@
+// src/App.tsx
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import ReactFlow, {
+  MiniMap,
+  Controls,
+  Background,
+  Node,
+  Edge,
+  ReactFlowProvider,
+  useReactFlow,
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+import RBush from 'rbush';
+
+// Define types for initial nodes and edges
+const initialNodes: Node[] = Array.from({ length: 1000 }, (_, i) => ({
+  id: `node-${i}`,
+  type: 'default',
+  data: { label: `Node ${i}` },
+  position: { x: Math.random() * 2200, y: Math.random() * 1000 }, // Random initial positions
+}));
+
+const initialEdges: Edge[] = Array.from({ length: 999 }, (_, i) => ({
+  id: `edge-${i}`,
+  source: `node-${i}`,
+  target: `node-${i + 1}`,
+}));
+
+function FlowComponent() {
+  const { getViewport, fitView } = useReactFlow();
+  const [nodes, setNodes] = useState<Node[]>(initialNodes);
+  const [edges, setEdges] = useState<Edge[]>(initialEdges);
+  const [visibleNodes, setVisibleNodes] = useState<Node[]>([]);
+  const [visibleEdges, setVisibleEdges] = useState<Edge[]>([]);
+  
+  const rTree = useRef(new RBush<Node>()).current;
+
+  // Function to update nodes in RBush index
+  const updateRTree = useCallback(() => {
+    const { x, y, zoom } = getViewport();
+    const viewportWidth = window.innerWidth / zoom;
+    const viewportHeight = window.innerHeight / zoom;
+    const padding = 0; // Padding around the viewport to account for movement
+
+    const indexedNodes = nodes.map(node => ({
+      ...node,
+      minX: node.position.x - padding,
+      minY: node.position.y - padding,
+      maxX: node.position.x + viewportWidth + padding,
+      maxY: node.position.y + viewportHeight + padding,
+    }));
+
+    rTree.clear();
+    rTree.load(indexedNodes);
+    console.log("dsfdsf",rTree)
+  }, [getViewport, nodes, rTree]);
+
+  // Function to get visible nodes and edges
+  const getVisibleNodesAndEdges = useCallback(() => {
+    const { x, y, zoom } = getViewport();
+    const viewportWidth = window.innerWidth / zoom;
+    const viewportHeight = window.innerHeight / zoom;
+    const padding = 200; // Padding around the viewport to account for movement
+
+    const viewportBounds = {
+      minX: x - padding,
+      minY: y - padding,
+      maxX: x + viewportWidth + padding,
+      maxY: y + viewportHeight + padding,
+    };
+
+    const visibleNodes = rTree.search(viewportBounds);
+    setVisibleNodes(visibleNodes);
+
+    const visibleNodeIds = new Set(visibleNodes.map(node => node.id));
+    const visibleEdges = edges.filter(edge => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target));
+    setVisibleEdges(visibleEdges);
+    console.log("visibleNodes",visibleNodes)
+  }, [getViewport, edges, rTree]);
+
+  // Initialize R-tree when nodes change
+  useEffect(() => {
+    updateRTree();
+    console.log("Updatetree",nodes)
+  }, [nodes, updateRTree]);
+
+  // Handle resize to update visible nodes and edges
+  useEffect(() => {
+    const handleResize = () => getVisibleNodesAndEdges();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [getVisibleNodesAndEdges]);
+
+  // Initial visibility check
+  useEffect(() => {
+    getVisibleNodesAndEdges();
+  }, [getVisibleNodesAndEdges]);
+
+  return (
+    <ReactFlow
+      nodes={visibleNodes}
+      edges={visibleEdges}
+      fitView
+     // onLoad={() => fitView()}
+      onMove={getVisibleNodesAndEdges}
+    >
+      <MiniMap />
+      <Controls />
+      <Background />
+    </ReactFlow>
+  );
+}
+
+function App() {
+  return (
+    <div style={{ height: '100vh' }}>
+      <ReactFlowProvider>
+        <FlowComponent />
+      </ReactFlowProvider>
+    </div>
+  );
+}
+
+export default App;

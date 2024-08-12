@@ -1,0 +1,218 @@
+// // src/App.tsx
+// import React, { useEffect, useState, useCallback, useRef } from 'react';
+// import ReactFlow, {
+//   MiniMap,
+//   Controls,
+//   Background,
+//   Node,
+//   Edge,
+//   ReactFlowProvider,
+//   useReactFlow,
+// } from 'reactflow';
+// import 'reactflow/dist/style.css';
+// import RBush from 'rbush';
+// import dagre from 'dagre';
+
+
+// // Define types for initial nodes and edges
+// const numNodes = 500;
+// const numEdges = numNodes * 5; 
+
+// const initialNodes: Node[] = Array.from({ length: numNodes }, (_, i) => ({
+//   id: `node-${i}`,
+//   type: 'default',
+//   data: { label: `Node ${i}` },
+//   position: { x: Math.random() * 2200, y: Math.random() * 1000 }, // Random initial positions
+// }));
+
+// // Create edges
+// const initialEdges: Edge[] = [];
+// const nodesWithChildren: Set<string> = new Set();
+
+// for (let i = 0; i < numNodes; i++) {
+//   const sourceNodeId = `node-${i}`;
+  
+//   // Determine how many children this node will have (2 or 5)
+//   const numChildren = Math.random() < 0.5 ? 2 : 5;
+  
+//   // Create edges to child nodes
+//   for (let j = 1; j <= numChildren; j++) {
+//     const childNodeIndex = i + j;
+//     if (childNodeIndex < numNodes) { // Ensure we do not exceed the number of nodes
+//       const targetNodeId = `node-${childNodeIndex}`;
+//       initialEdges.push({
+//         id: `edge-${initialEdges.length}`,
+//         source: sourceNodeId,
+//         target: targetNodeId,
+//       });
+//       nodesWithChildren.add(sourceNodeId);
+//       nodesWithChildren.add(targetNodeId);
+//     }
+//   }
+// }
+
+// // Optionally ensure that every node is a part of some edge
+// // This step is important if you want to make sure all nodes are connected
+// const allNodes = new Set(initialNodes.map(node => node.id));
+// const unconnectedNodes = Array.from(allNodes).filter(nodeId => !nodesWithChildren.has(nodeId));
+// unconnectedNodes.forEach(nodeId => {
+//   const randomTargetNodeId = Array.from(allNodes).find(id => id !== nodeId);
+//   if (randomTargetNodeId) {
+//     initialEdges.push({
+//       id: `edge-${initialEdges.length}`,
+//       source: nodeId,
+//       target: randomTargetNodeId,
+//     });
+//   }
+// });
+
+// const getLayoutedElements = (nodes: Node[], edges: Edge[], direction: 'LR') => {
+//   const dagreGraph = new dagre.graphlib.Graph();
+//   console.log("Layouted")
+//   dagreGraph.setGraph({ rankdir: direction });
+//   dagreGraph.setDefaultEdgeLabel(() => ({}));
+
+//   nodes.forEach(node => {
+//     dagreGraph.setNode(node.id, { width: 172, height: 36 });
+//   });
+
+//   edges.forEach(edge => {
+//     dagreGraph.setEdge(edge.source, edge.target);
+//   });
+
+//   dagre.layout(dagreGraph);
+
+//   // const layoutedNodes = nodes.map(node => {
+//   //   const { x, y } = dagreGraph.node(node.id);
+//   //   return {
+//   //     ...node,
+//   //     position: { x: x - 172 / 2, y: y - 36 / 2 }
+//   //   };
+//   // });
+//   const layoutedNodes = nodes.map((node) => {
+//         const nodeWithPosition = dagreGraph.node(node.id);
+//         node.position = {
+//           x: nodeWithPosition.x ,
+//           y: nodeWithPosition.y,
+//         };
+//         node.data = {
+//           ...node.data,
+//           minX: node.position.x ,
+//           minY: node.position.y,
+//           maxX: node.position.x,
+//           maxY: node.position.y,
+//         };
+//         return node;
+//       });
+//   return {
+//     nodes: layoutedNodes,
+//     edges
+//   };
+// };
+// console.log("Intitial",initialNodes);
+// console.log("Initial",initialEdges);
+// const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(initialNodes, initialEdges,'LR');
+// function FlowComponent() {
+ 
+//   const { getViewport, fitView } = useReactFlow();
+//   const [nodes, setNodes] = useState<Node[]>(layoutedNodes);
+//   const [edges, setEdges] = useState<Edge[]>(layoutedEdges);
+//   const [visibleNodes, setVisibleNodes] = useState<Node[]>([]);
+//   const [visibleEdges, setVisibleEdges] = useState<Edge[]>([]);
+//   // useEffect(() => {
+//   //   const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(nodes, edges,'LR');
+//   //   setNodes(layoutedNodes);
+//   //   setEdges(layoutedEdges);
+//   //   console.log("hjfdsgfh")
+//   //   // Fit the viewport after layout computation
+//   //   fitView();
+//   // }, [nodes, edges, fitView]);
+//   const rTree = useRef(new RBush<Node>()).current;
+
+//   // Function to update nodes in RBush index
+//   const updateRTree = useCallback(() => {
+//     const { x, y, zoom } = getViewport();
+//     const viewportWidth = window.innerWidth / zoom;
+//     const viewportHeight = window.innerHeight / zoom;
+//     const padding = 50; // Padding around the viewport to account for movement
+
+//     const indexedNodes = nodes.map(node => ({
+//       ...node,
+//       minX: node.position.x - padding,
+//       minY: node.position.y - padding,
+//       maxX: node.position.x  + padding,
+//       maxY: node.position.y  + padding,
+//     }));
+
+//     rTree.clear();
+//     rTree.load(indexedNodes);
+//     console.log("dsfdsf")
+//   }, [getViewport, nodes, rTree]);
+
+//   // Function to get visible nodes and edges
+//   const getVisibleNodesAndEdges = useCallback(() => {
+//     const { x, y, zoom } = getViewport();
+//     const viewportWidth = window.innerWidth / zoom;
+//     const viewportHeight = window.innerHeight / zoom;
+//     const padding =50; // Padding around the viewport to account for movement
+
+//     const viewportBounds = {
+//       minX: x - padding,
+//       minY: y - padding,
+//       maxX: x + viewportWidth + padding,
+//       maxY: y + viewportHeight + padding,
+//     };
+
+//     const visibleNodes = rTree.search(viewportBounds);
+//     setVisibleNodes(visibleNodes);
+
+//     const visibleNodeIds = new Set(visibleNodes.map(node => node.id));
+//     const visibleEdges = edges.filter(edge => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target));
+//     setVisibleEdges(visibleEdges);
+//     console.log("visibleNodes",visibleNodes)
+//   }, [getViewport, edges, rTree]);
+
+//   // Initialize R-tree when nodes change
+//   useEffect(() => {
+//     updateRTree();
+//   }, [nodes, updateRTree]);
+
+//   // Handle resize to update visible nodes and edges
+//   useEffect(() => {
+//     const handleResize = () => getVisibleNodesAndEdges();
+//     window.addEventListener('resize', handleResize);
+//     return () => window.removeEventListener('resize', handleResize);
+//   }, [getVisibleNodesAndEdges]);
+
+//   // Initial visibility check
+//   useEffect(() => {
+//     getVisibleNodesAndEdges();
+//   }, [getVisibleNodesAndEdges]);
+
+//   return (
+//     <ReactFlow
+//       nodes={visibleNodes}
+//       edges={visibleEdges}
+//       // fitView
+//       onLoad={() => fitView()}
+//       onMoveEnd={getVisibleNodesAndEdges}
+//       // onMove={getVisibleNodesAndEdges}
+//     >
+//       <MiniMap />
+//       <Controls />
+//       <Background />
+//     </ReactFlow>
+//   );
+// }
+
+// function App() {
+//   return (
+//     <div style={{ height: '100vh' }}>
+//       <ReactFlowProvider>
+//         <FlowComponent />
+//       </ReactFlowProvider>
+//     </div>
+//   );
+// }
+
+// export default App;
